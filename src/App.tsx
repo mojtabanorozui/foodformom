@@ -1,39 +1,106 @@
-import { useState } from "react";
-import { DifficultyBadge } from "./components/DifficultyBadge";
+import { useMemo, useState, useEffect } from "react";
+import { CategoryFilterBar } from "./components/CategoryFilterBar";
+import { FoodBrowseCard } from "./components/FoodBrowseCard";
+import { FoodDetailModal } from "./components/FoodDetailModal";
 import { FoodMatchCard } from "./components/FoodMatchCard";
 import { IngredientsModal } from "./components/IngredientsModal";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
-import { RecipeCard } from "./components/RecipeCard";
+import { RecentlyViewedRow } from "./components/RecentlyViewedRow";
+import { SearchBar } from "./components/SearchBar";
 import { SlotReel } from "./components/SlotReel";
+import { SplashScreen } from "./components/SplashScreen";
+import { TabNav } from "./components/TabNav";
 import { foods } from "./data/food";
-import { useWikipediaImage } from "./data/hooks/useWikipediaImage";
+import { useFavorites } from "./hooks/useFavorites";
+import { useInstallPrompt } from "./hooks/useInstallPrompt";
+import { useRecentlyViewed } from "./hooks/useRecentlyViewed";
 import { useLanguage } from "./i18n/LanguageContext";
-import type { Food } from "./type";
+import type { AppTab, CategoryFilter, Food } from "./type";
+import { filterFoods } from "./utils/filterFoods";
+import { getFoodCategory } from "./utils/foodHelpers";
 import { matchFoods } from "./utils/matchFoods";
 
+const SPLASH_KEY = "ffm_splash_v2";
+
 function App() {
-  const { t, foodName } = useLanguage();
-  const [result, setResult] = useState<Food | null>(null);
+  const { t } = useLanguage();
+  const { favorites, toggleFavorite, isFavorite } = useFavorites();
+  const { recentIds, addRecent } = useRecentlyViewed();
+  const { canInstall, install } = useInstallPrompt();
+
+  const [splashDone, setSplashDone] = useState(
+    () => localStorage.getItem(SPLASH_KEY) === "1",
+  );
+
+  useEffect(() => {
+    if (splashDone) localStorage.setItem(SPLASH_KEY, "1");
+  }, [splashDone]);
+
+  const [tab, setTab] = useState<AppTab>("browse");
+  const [category, setCategory] = useState<CategoryFilter>("all");
+  const [search, setSearch] = useState("");
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
 
-  const { imageUrl, isLoading, failed } = useWikipediaImage(
-    result ? (result.wikiTitle ?? result.name) : "",
+  const allIngredients = useMemo(
+    () =>
+      Array.from(new Set(foods.flatMap((food) => food.ingredients))).sort(),
+    [],
   );
 
-  const allIngredients = Array.from(
-    new Set(foods.flatMap((food) => food.ingredients)),
-  ).sort();
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: foods.length };
+    for (const food of foods) {
+      const cat = getFoodCategory(food);
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    }
+    return counts;
+  }, []);
+
+  const filteredFoods = useMemo(
+    () => filterFoods(foods, category, search),
+    [category, search],
+  );
+
+  const favoriteFoods = useMemo(
+    () => foods.filter((f) => favorites.includes(f.id)),
+    [favorites],
+  );
+
+  const recentFoods = useMemo(
+    () =>
+      recentIds
+        .map((id) => foods.find((f) => f.id === id))
+        .filter((f): f is Food => f != null),
+    [recentIds],
+  );
+
+  const matches = useMemo(
+    () =>
+      selectedIngredients.length > 0
+        ? matchFoods(filteredFoods, selectedIngredients)
+        : [],
+    [selectedIngredients, filteredFoods],
+  );
+
+  function openFood(food: Food) {
+    setSelectedFood(food);
+    addRecent(food.id);
+  }
+
+  function handleSpinResult(food: Food) {
+    openFood(food);
+  }
 
   function handleIngredientsSubmit(selected: string[]) {
     setSelectedIngredients(selected);
     setModalOpen(false);
   }
 
-  const matches =
-    selectedIngredients.length > 0
-      ? matchFoods(foods, selectedIngredients)
-      : [];
+  if (!splashDone) {
+    return <SplashScreen onEnter={() => setSplashDone(true)} />;
+  }
 
   return (
     <div className="bg-food-collage relative flex min-h-svh flex-col">
@@ -44,67 +111,144 @@ function App() {
         <span className="absolute bottom-[28%] left-[8%] text-6xl">🧁</span>
       </div>
 
-      <div className="relative z-20 flex justify-center pt-6">
+      <div className="relative z-20 flex items-center justify-between px-4 pt-6 sm:px-6">
+        <div className="flex-1" />
         <LanguageSwitcher />
+        <div className="flex flex-1 justify-end">
+          {canInstall && (
+            <button
+              onClick={install}
+              className="flex items-center gap-1.5 rounded-xl border border-warm/40 bg-white/80 px-3 py-1.5 text-xs font-semibold text-warm shadow-sm backdrop-blur-sm transition-all hover:border-warm hover:bg-white hover:shadow-md active:scale-[0.97]"
+            >
+              {t("installApp")}
+            </button>
+          )}
+        </div>
       </div>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-4 py-6 sm:px-6 sm:py-10">
-        <header className="mb-8 text-center">
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
+        <header className="text-center">
           <h1 className="font-display text-4xl font-bold tracking-tight text-espresso drop-shadow-sm sm:text-5xl">
             {t("appTitle")}
           </h1>
-          <p className="mt-2 text-lg text-espresso/70">{t("appSubtitle")}</p>
         </header>
 
-        <SlotReel foods={foods} onResult={setResult} />
+        <SearchBar value={search} onChange={setSearch} />
+        <CategoryFilterBar
+          value={category}
+          onChange={setCategory}
+          counts={categoryCounts}
+        />
+        <TabNav
+          active={tab}
+          onChange={setTab}
+          favoriteCount={favorites.length}
+        />
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="mt-8 rounded-2xl border-2 border-sage/40 bg-white/80 px-6 py-3 text-sm font-semibold text-espresso shadow-md backdrop-blur-sm transition-all hover:border-sage hover:bg-white hover:shadow-lg active:scale-[0.98]"
-        >
-          {t("kitchenButton")}
-        </button>
+        {/* Browse tab */}
+        {tab === "browse" && (
+          <div className="flex w-full flex-col gap-8">
+            <RecentlyViewedRow
+              foods={recentFoods}
+              isFavorite={isFavorite}
+              onToggleFavorite={toggleFavorite}
+              onOpen={openFood}
+            />
+
+            <section className="w-full">
+              <p className="mb-4 text-sm font-semibold text-espresso/50">
+                {filteredFoods.length} {t("foodsInCategory")}
+              </p>
+              {filteredFoods.length === 0 ? (
+                <p className="py-12 text-center text-espresso/50 italic">
+                  {t("noResults")}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredFoods.map((food) => (
+                    <FoodBrowseCard
+                      key={food.id}
+                      food={food}
+                      isFavorite={isFavorite(food.id)}
+                      onToggleFavorite={toggleFavorite}
+                      onOpen={openFood}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* Spin tab */}
+        {tab === "spin" && (
+          <div className="flex w-full flex-col items-center">
+            {filteredFoods.length === 0 ? (
+              <p className="py-12 text-espresso/50 italic">{t("noResults")}</p>
+            ) : (
+              <>
+                <p className="mb-4 text-sm text-espresso/50">
+                  {filteredFoods.length} {t("foodsInCategory")}
+                </p>
+                <SlotReel
+                  foods={filteredFoods}
+                  onResult={handleSpinResult}
+                />
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Favorites tab */}
+        {tab === "favorites" && (
+          <section className="w-full">
+            {favoriteFoods.length === 0 ? (
+              <p className="py-12 text-center text-espresso/50 italic">
+                {t("noFavorites")}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {favoriteFoods.map((food) => (
+                  <FoodBrowseCard
+                    key={food.id}
+                    food={food}
+                    isFavorite
+                    onToggleFavorite={toggleFavorite}
+                    onOpen={openFood}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Kitchen matcher */}
+        <div className="flex justify-center">
+          <button
+            onClick={() => setModalOpen(true)}
+            className="rounded-2xl border-2 border-sage/40 bg-white/80 px-6 py-3 text-sm font-semibold text-espresso shadow-md backdrop-blur-sm transition-all hover:border-sage hover:bg-white hover:shadow-lg active:scale-[0.98]"
+          >
+            {t("kitchenButton")}
+          </button>
+        </div>
 
         {matches.length > 0 && (
-          <section className="mt-10 w-full max-w-lg">
+          <section className="w-full max-w-lg mx-auto">
             <h2 className="mb-4 font-display text-2xl font-bold text-espresso">
               {t("matchingDishes")}
             </h2>
             {matches.map((match) => (
-              <FoodMatchCard key={match.food.id} match={match} />
+              <FoodMatchCard
+                key={match.food.id}
+                match={match}
+                onOpen={openFood}
+              />
             ))}
           </section>
         )}
 
         {selectedIngredients.length > 0 && matches.length === 0 && (
-          <p className="mt-8 text-espresso/50 italic">{t("noMatches")}</p>
-        )}
-
-        {result && (
-          <section className="mt-10 w-full max-w-lg animate-[modal-in_0.4s_ease-out] rounded-3xl bg-white/85 p-6 shadow-[0_12px_40px_rgba(61,64,91,0.15)] ring-1 ring-white/80 backdrop-blur-sm">
-            <h2 className="font-display text-2xl font-bold text-espresso">
-              {result.emoji} {foodName(result)}
-            </h2>
-            <div className="mt-3">
-              <DifficultyBadge difficulty={result.difficulty} />
-            </div>
-            {isLoading && (
-              <p className="mt-4 animate-pulse text-sm text-espresso/50">
-                {t("loadingImage")}
-              </p>
-            )}
-            {!isLoading && imageUrl && (
-              <img
-                src={imageUrl}
-                alt={foodName(result)}
-                className="mt-4 w-full rounded-2xl object-cover shadow-md ring-2 ring-gold/30"
-              />
-            )}
-            {!isLoading && failed && (
-              <p className="mt-4 text-6xl">{result.emoji}</p>
-            )}
-            <RecipeCard food={result} />
-          </section>
+          <p className="text-center text-espresso/50 italic">{t("noMatches")}</p>
         )}
       </main>
 
@@ -121,6 +265,15 @@ function App() {
           </a>
         </p>
       </footer>
+
+      {selectedFood && (
+        <FoodDetailModal
+          food={selectedFood}
+          isFavorite={isFavorite(selectedFood.id)}
+          onClose={() => setSelectedFood(null)}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
 
       {modalOpen && (
         <IngredientsModal

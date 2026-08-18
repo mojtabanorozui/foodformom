@@ -1,4 +1,5 @@
-import type { Food, Recipe } from "../type";
+import type { Food } from "../type";
+import { buildRecipe } from "./recipeBuilder";
 
 type DishCategory =
   | "khoresh"
@@ -90,7 +91,7 @@ function ingredientList(food: Food, locale: "en" | "fa"): string {
 
 const templates: Record<
   DishCategory,
-  (food: Food) => Recipe
+  (food: Food) => { stepsEn: string[]; stepsFa: string[] }
 > = {
   khoresh: (food) => ({
     stepsEn: [
@@ -271,7 +272,8 @@ const templates: Record<
   }),
 };
 
-export function generateRecipe(food: Food): Recipe {
+export function generateRecipe(food: Food) {
   const category = detectCategory(food);
-  return templates[category](food);
+  const { stepsEn, stepsFa } = templates[category](food);
+  return buildRecipe(food, stepsEn, stepsFa);
 }

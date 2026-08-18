@@ -1,24 +1,33 @@
 import { useLanguage } from "../i18n/LanguageContext";
 import type { FoodMatch } from "../utils/matchFoods";
+import { getFoodCategory } from "../utils/foodHelpers";
+import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
-import { RecipeCard } from "./RecipeCard";
 
 interface FoodMatchCardProps {
   match: FoodMatch;
+  onOpen: (food: FoodMatch["food"]) => void;
 }
 
-export function FoodMatchCard({ match }: FoodMatchCardProps) {
+export function FoodMatchCard({ match, onOpen }: FoodMatchCardProps) {
   const { t, foodName, ingredientLabel, locale } = useLanguage();
   const { food, matchedCount, totalCount, missing } = match;
   const pct = Math.round((matchedCount / totalCount) * 100);
 
   return (
-    <div className="mb-3 rounded-2xl border border-[#e5ddd4] bg-white/90 p-4 text-start shadow-sm backdrop-blur-sm transition-shadow hover:shadow-md">
+    <button
+      type="button"
+      onClick={() => onOpen(food)}
+      className="mb-3 w-full rounded-2xl border border-[#e5ddd4] bg-white/90 p-4 text-start shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+    >
       <div className="flex items-center justify-between gap-3">
         <strong className="text-espresso">
           {food.emoji} {foodName(food)}
         </strong>
         <DifficultyBadge difficulty={food.difficulty} />
+      </div>
+      <div className="mt-2">
+        <CategoryBadge category={getFoodCategory(food)} />
       </div>
 
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f0ebe4]">
@@ -38,8 +47,7 @@ export function FoodMatchCard({ match }: FoodMatchCardProps) {
           </span>
         )}
       </p>
-
-      <RecipeCard food={food} defaultOpen={false} />
-    </div>
+      <p className="mt-2 text-xs font-semibold text-warm">{t("showRecipe")} →</p>
+    </button>
   );
 }
