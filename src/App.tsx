@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { CategoryFilterBar } from "./components/CategoryFilterBar";
+import { CommunityTab } from "./components/CommunityTab";
 import { FoodBrowseCard } from "./components/FoodBrowseCard";
 import { FoodDetailModal } from "./components/FoodDetailModal";
 import { FoodMatchCard } from "./components/FoodMatchCard";
@@ -14,6 +15,7 @@ import { foods } from "./data/food";
 import { useFavorites } from "./hooks/useFavorites";
 import { useInstallPrompt } from "./hooks/useInstallPrompt";
 import { useRecentlyViewed } from "./hooks/useRecentlyViewed";
+import { useUserRecipes } from "./hooks/useUserRecipes";
 import { useLanguage } from "./i18n/LanguageContext";
 import type { AppTab, CategoryFilter, Food } from "./type";
 import { filterFoods } from "./utils/filterFoods";
@@ -27,6 +29,7 @@ function App() {
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const { recentIds, addRecent } = useRecentlyViewed();
   const { canInstall, install } = useInstallPrompt();
+  const { recipes: userRecipes, addRecipe, deleteRecipe } = useUserRecipes();
 
   const [splashDone, setSplashDone] = useState(
     () => localStorage.getItem(SPLASH_KEY) === "1",
@@ -143,6 +146,7 @@ function App() {
           active={tab}
           onChange={setTab}
           favoriteCount={favorites.length}
+          communityCount={userRecipes.length}
         />
 
         {/* Browse tab */}
@@ -220,6 +224,17 @@ function App() {
               </div>
             )}
           </section>
+        )}
+
+        {/* Community tab */}
+        {tab === "community" && (
+          <CommunityTab
+            recipes={userRecipes}
+            onDelete={deleteRecipe}
+            onAddRecipe={addRecipe}
+            onOpenFood={openFood}
+            foods={foods}
+          />
         )}
 
         {/* Kitchen matcher */}

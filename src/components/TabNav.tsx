@@ -6,15 +6,17 @@ interface TabNavProps {
   active: AppTab;
   onChange: (tab: AppTab) => void;
   favoriteCount: number;
+  communityCount: number;
 }
 
-export function TabNav({ active, onChange, favoriteCount }: TabNavProps) {
+export function TabNav({ active, onChange, favoriteCount, communityCount }: TabNavProps) {
   const { t } = useLanguage();
 
   const tabs: { id: AppTab; icon: string; badge?: number }[] = [
     { id: "browse", icon: "📋" },
     { id: "spin", icon: "🎰" },
     { id: "favorites", icon: "❤️", badge: favoriteCount },
+    { id: "community", icon: "👩‍🍳", badge: communityCount },
   ];
 
   return (

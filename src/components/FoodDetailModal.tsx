@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { Food } from "../type";
 import { getFoodCategory } from "../utils/foodHelpers";
@@ -7,6 +8,9 @@ import { getStepText } from "../utils/recipeBuilder";
 import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { StepImage } from "./StepImage";
+import { AddRecipeModal } from "./AddRecipeModal";
+import { UserRecipesSection } from "./UserRecipesSection";
+import { useUserRecipes } from "../hooks/useUserRecipes";
 
 const STEP_COLORS = [
   { bg: "bg-warm", ring: "ring-warm/30" },
@@ -35,7 +39,12 @@ export function FoodDetailModal({
   const category = getFoodCategory(food);
   const heroKey = recipe.steps[0]?.imageKey ?? heroImageForCategory(category);
 
+  const { addRecipe, deleteRecipe, recipesForFood } = useUserRecipes();
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const communityRecipes = recipesForFood(food.id);
+
   return (
+    <>
     <div
       className="modal-backdrop fixed inset-0 z-[200] overflow-y-auto bg-[#3d405b]/70 p-4 backdrop-blur-sm"
       onClick={onClose}
@@ -129,8 +138,24 @@ export function FoodDetailModal({
               })}
             </div>
           </section>
+
+          {/* Community recipes */}
+          <UserRecipesSection
+            recipes={communityRecipes}
+            onDelete={deleteRecipe}
+            onAdd={() => setAddModalOpen(true)}
+          />
         </div>
       </div>
     </div>
+
+    {addModalOpen && (
+      <AddRecipeModal
+        food={food}
+        onClose={() => setAddModalOpen(false)}
+        onSubmit={addRecipe}
+      />
+    )}
+    </>
   );
 }

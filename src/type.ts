@@ -33,6 +33,18 @@ export interface Recipe {
   stepsFa?: string[];
 }
 
-export type AppTab = "browse" | "spin" | "favorites";
+export type AppTab = "browse" | "spin" | "favorites" | "community";
 
 export type CategoryFilter = MealCategory | "all";
+
+export interface UserRecipe {
+  id: string;
+  foodId: string;
+  foodName: string;
+  authorName: string;
+  title: string;
+  ingredients: string[];
+  steps: string[];
+  note?: string;
+  createdAt: number;
+}
