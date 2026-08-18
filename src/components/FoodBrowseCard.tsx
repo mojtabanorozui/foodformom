@@ -4,6 +4,7 @@ import { getFoodCategory } from "../utils/foodHelpers";
 import { getHeroImage } from "../utils/getRecipe";
 import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
+import { StepImage } from "./StepImage";
 
 interface FoodBrowseCardProps {
   food: Food;
@@ -25,16 +26,14 @@ export function FoodBrowseCard({
     <article className="group overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-[#e5ddd4] transition-all hover:-translate-y-1 hover:shadow-xl">
       <button type="button" onClick={() => onOpen(food)} className="block w-full text-start">
         <div className="relative h-44 overflow-hidden">
-          <img
-            src={hero}
-            alt={foodName(food)}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
+          <StepImage
+            imageKey={hero}
+            className="h-full w-full transition-transform duration-500 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-          <span className="absolute bottom-3 start-3 text-3xl drop-shadow-lg">
-            {food.emoji}
-          </span>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-6xl drop-shadow-xl">{food.emoji ?? "🍽️"}</span>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
           <CategoryBadge
             category={getFoodCategory(food)}
             className="absolute top-3 start-3"
