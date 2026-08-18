@@ -8,6 +8,15 @@ import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { StepImage } from "./StepImage";
 
+const STEP_COLORS = [
+  { bg: "bg-warm", ring: "ring-warm/30" },
+  { bg: "bg-sage", ring: "ring-sage/30" },
+  { bg: "bg-[#7c9e87]", ring: "ring-[#7c9e87]/30" },
+  { bg: "bg-[#c07a5f]", ring: "ring-[#c07a5f]/30" },
+  { bg: "bg-[#8b7355]", ring: "ring-[#8b7355]/30" },
+  { bg: "bg-[#5f7c8b]", ring: "ring-[#5f7c8b]/30" },
+];
+
 interface FoodDetailModalProps {
   food: Food;
   isFavorite: boolean;
@@ -87,31 +96,37 @@ export function FoodDetailModal({
             </div>
           </section>
 
-          {/* Step-by-step with photos */}
+          {/* Step-by-step */}
           <section>
             <h3 className="mb-4 text-sm font-bold tracking-wide text-espresso/60 uppercase">
               {t("recipeSteps")}
             </h3>
-            <div className="space-y-5">
-              {recipe.steps.map((step, i) => (
-                <div
-                  key={i}
-                  className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e5ddd4]"
-                >
-                  <StepImage
-                    imageKey={step.imageKey}
-                    className="h-40 w-full sm:h-48"
-                  />
-                  <div className="flex gap-3 p-4">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warm text-sm font-bold text-white">
-                      {i + 1}
-                    </span>
-                    <p className="text-sm leading-relaxed text-espresso/85 sm:text-base">
-                      {getStepText(step, locale)}
-                    </p>
+            <div className="flex flex-col">
+              {recipe.steps.map((step, i) => {
+                const color = STEP_COLORS[i % STEP_COLORS.length];
+                const isLast = i === recipe.steps.length - 1;
+                return (
+                  <div key={i} className="flex gap-4">
+                    {/* Timeline spine */}
+                    <div className="flex flex-col items-center">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${color.bg} ring-4 ${color.ring} text-sm font-bold text-white shadow-sm`}
+                      >
+                        {i + 1}
+                      </span>
+                      {!isLast && (
+                        <div className="mt-1 w-0.5 flex-1 bg-gradient-to-b from-[#e5ddd4] to-transparent mb-1" />
+                      )}
+                    </div>
+                    {/* Content */}
+                    <div className={`pb-5 pt-1 flex-1 ${isLast ? "" : ""}`}>
+                      <p className="text-sm leading-relaxed text-espresso/85 sm:text-base">
+                        {getStepText(step, locale)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>

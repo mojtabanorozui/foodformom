@@ -1,4 +1,5 @@
 import type { Food } from "../type";
+import { ingredientLabelsFa } from "../i18n/ingredientLabels.fa";
 import { buildRecipe } from "./recipeBuilder";
 
 type DishCategory =
@@ -86,7 +87,9 @@ function detectCategory(food: Food): DishCategory {
 
 function ingredientList(food: Food, locale: "en" | "fa"): string {
   if (locale === "en") return food.ingredients.join(", ");
-  return food.ingredients.join("، ");
+  return food.ingredients
+    .map((i) => ingredientLabelsFa[i] ?? i)
+    .join("، ");
 }
 
 const templates: Record<
@@ -140,7 +143,7 @@ const templates: Record<
       "Rest briefly, then serve with grilled tomatoes, sumac onions, and saffron rice or flatbread.",
     ],
     stepsFa: [
-      `مواد: ${ingredientList(food, "fa")}.`,
+      `مواد لازم: ${ingredientList(food, "fa")}.`,
       "گوشت یا مرغ را با پیاز رنده‌شده، ماست، زعفران، آب‌لیمو، نمک و فلفل مخلوط و حداقل ۲ ساعت (ترجیحاً یک شب) مزه‌دار کنید.",
       "کوبیده را دور سیخ بپیچید یا تکه‌های مرغ را سیخ کنید.",
       "روی زغال داغ بپزید و مرتب بچرخانید تا پخته و کمی دودی شود.",

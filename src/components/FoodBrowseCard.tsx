@@ -19,7 +19,7 @@ export function FoodBrowseCard({
   onToggleFavorite,
   onOpen,
 }: FoodBrowseCardProps) {
-  const { foodName } = useLanguage();
+  const { foodName, ingredientLabel } = useLanguage();
   const hero = getHeroImage({ ...food, category: getFoodCategory(food) });
 
   return (
@@ -47,7 +47,7 @@ export function FoodBrowseCard({
             <DifficultyBadge difficulty={food.difficulty} />
           </div>
           <p className="mt-2 line-clamp-2 text-sm text-espresso/55">
-            {food.ingredients.slice(0, 4).join(" · ")}
+            {food.ingredients.slice(0, 4).map(ingredientLabel).join(" · ")}
             {food.ingredients.length > 4 ? "…" : ""}
           </p>
         </div>
