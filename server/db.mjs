@@ -1,56 +1,30 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { MongoClient } from "mongodb";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = join(__dirname, "data", "foodformom.db");
+let db;
 
-mkdirSync(dirname(dbPath), { recursive: true });
+export async function connectDb() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI is not set. Add it to your .env file.");
+  }
 
-const db = new DatabaseSync(dbPath);
+  const client = new MongoClient(uri);
+  await client.connect();
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    display_name TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  );
+  db = client.db(process.env.MONGODB_DB ?? "foodformom");
 
-  CREATE TABLE IF NOT EXISTS sessions (
-    token TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
+  await db.collection("users").createIndex({ email: 1 }, { unique: true });
+  await db.collection("sessions").createIndex({ token: 1 }, { unique: true });
+  await db.collection("user_recipes").createIndex({ createdAt: -1 });
+  await db.collection("people_recipes").createIndex({ createdAt: -1 });
 
-  CREATE TABLE IF NOT EXISTS user_recipes (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    food_id TEXT NOT NULL,
-    food_name TEXT NOT NULL,
-    author_name TEXT NOT NULL,
-    title TEXT NOT NULL,
-    ingredients TEXT NOT NULL,
-    steps TEXT NOT NULL,
-    note TEXT,
-    created_at INTEGER NOT NULL
-  );
+  console.log(`Connected to MongoDB (${db.databaseName})`);
+  return db;
+}
 
-  CREATE TABLE IF NOT EXISTS people_recipes (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    author_name TEXT NOT NULL,
-    name TEXT NOT NULL,
-    emoji TEXT,
-    difficulty TEXT NOT NULL,
-    category TEXT,
-    ingredients TEXT NOT NULL,
-    steps TEXT NOT NULL,
-    note TEXT,
-    created_at INTEGER NOT NULL
-  );
-`);
-
-export default db;
+export function getDb() {
+  if (!db) {
+    throw new Error("Database not connected. Call connectDb() first.");
+  }
+  return db;
+}

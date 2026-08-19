@@ -1,7 +1,8 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import db from "./db.mjs";
+import { connectDb, getDb } from "./db.mjs";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -17,15 +18,7 @@ function newId(prefix) {
   return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
 }
 
-function parseJsonArray(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return [];
-  }
-}
-
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, _res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) {
@@ -33,16 +26,23 @@ function authMiddleware(req, res, next) {
     return next();
   }
 
-  const row = db
-    .prepare(
-      `SELECT u.id, u.email, u.display_name AS displayName, u.created_at AS createdAt
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ?`,
-    )
-    .get(token, Date.now());
+  const session = await getDb()
+    .collection("sessions")
+    .findOne({ token, expiresAt: { $gt: Date.now() } });
 
-  req.user = row ?? null;
+  if (!session) {
+    req.user = null;
+    return next();
+  }
+
+  const user = await getDb()
+    .collection("users")
+    .findOne(
+      { id: session.userId },
+      { projection: { _id: 0, id: 1, email: 1, displayName: 1, createdAt: 1 } },
+    );
+
+  req.user = user ?? null;
   next();
 }
 
@@ -59,7 +59,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/auth/signup", (req, res) => {
+app.post("/api/auth/signup", async (req, res) => {
   const email = String(req.body.email ?? "")
     .trim()
     .toLowerCase();
@@ -73,7 +73,7 @@ app.post("/api/auth/signup", (req, res) => {
     return res.status(400).json({ error: "authErrorPassword" });
   }
 
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  const existing = await getDb().collection("users").findOne({ email });
   if (existing) {
     return res.status(409).json({ error: "authErrorEmailTaken" });
   }
@@ -86,17 +86,11 @@ app.post("/api/auth/signup", (req, res) => {
     createdAt: Date.now(),
   };
 
-  db.prepare(
-    "INSERT INTO users (id, email, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-  ).run(user.id, user.email, user.displayName, user.passwordHash, user.createdAt);
+  await getDb().collection("users").insertOne(user);
 
   const token = newId("sess");
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-  db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)").run(
-    token,
-    user.id,
-    expiresAt,
-  );
+  await getDb().collection("sessions").insertOne({ token, userId: user.id, expiresAt });
 
   res.json({
     token,
@@ -109,17 +103,13 @@ app.post("/api/auth/signup", (req, res) => {
   });
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const email = String(req.body.email ?? "")
     .trim()
     .toLowerCase();
   const password = String(req.body.password ?? "");
 
-  const row = db
-    .prepare(
-      "SELECT id, email, display_name AS displayName, password_hash AS passwordHash, created_at AS createdAt FROM users WHERE email = ?",
-    )
-    .get(email);
+  const row = await getDb().collection("users").findOne({ email });
 
   if (!row || row.passwordHash !== hashPassword(password)) {
     return res.status(401).json({ error: "authErrorInvalid" });
@@ -127,11 +117,7 @@ app.post("/api/auth/login", (req, res) => {
 
   const token = newId("sess");
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-  db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)").run(
-    token,
-    row.id,
-    expiresAt,
-  );
+  await getDb().collection("sessions").insertOne({ token, userId: row.id, expiresAt });
 
   res.json({
     token,
@@ -149,34 +135,26 @@ app.get("/api/auth/me", (req, res) => {
   res.json({ user: req.user });
 });
 
-app.post("/api/auth/logout", (req, res) => {
+app.post("/api/auth/logout", async (req, res) => {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (token) {
-    db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+    await getDb().collection("sessions").deleteOne({ token });
   }
   res.json({ ok: true });
 });
 
-app.get("/api/recipes/user", (_req, res) => {
-  const rows = db
-    .prepare(
-      `SELECT id, user_id AS userId, food_id AS foodId, food_name AS foodName,
-              author_name AS authorName, title, ingredients, steps, note, created_at AS createdAt
-       FROM user_recipes ORDER BY created_at DESC`,
-    )
-    .all();
+app.get("/api/recipes/user", async (_req, res) => {
+  const rows = await getDb()
+    .collection("user_recipes")
+    .find({}, { projection: { _id: 0 } })
+    .sort({ createdAt: -1 })
+    .toArray();
 
-  res.json(
-    rows.map((row) => ({
-      ...row,
-      ingredients: parseJsonArray(row.ingredients),
-      steps: parseJsonArray(row.steps),
-    })),
-  );
+  res.json(rows);
 });
 
-app.post("/api/recipes/user", requireAuth, (req, res) => {
+app.post("/api/recipes/user", requireAuth, async (req, res) => {
   const recipe = {
     id: newId("ur"),
     userId: req.user.id,
@@ -184,9 +162,9 @@ app.post("/api/recipes/user", requireAuth, (req, res) => {
     foodName: String(req.body.foodName ?? ""),
     authorName: String(req.body.authorName ?? req.user.displayName),
     title: String(req.body.title ?? ""),
-    ingredients: JSON.stringify(req.body.ingredients ?? []),
-    steps: JSON.stringify(req.body.steps ?? []),
-    note: req.body.note ? String(req.body.note) : null,
+    ingredients: req.body.ingredients ?? [],
+    steps: req.body.steps ?? [],
+    note: req.body.note ? String(req.body.note) : undefined,
     createdAt: Date.now(),
   };
 
@@ -194,81 +172,42 @@ app.post("/api/recipes/user", requireAuth, (req, res) => {
     return res.status(400).json({ error: "Missing fields" });
   }
 
-  db.prepare(
-    `INSERT INTO user_recipes
-     (id, user_id, food_id, food_name, author_name, title, ingredients, steps, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    recipe.id,
-    recipe.userId,
-    recipe.foodId,
-    recipe.foodName,
-    recipe.authorName,
-    recipe.title,
-    recipe.ingredients,
-    recipe.steps,
-    recipe.note,
-    recipe.createdAt,
-  );
+  await getDb().collection("user_recipes").insertOne(recipe);
 
-  res.status(201).json({
-    id: recipe.id,
-    userId: recipe.userId,
-    foodId: recipe.foodId,
-    foodName: recipe.foodName,
-    authorName: recipe.authorName,
-    title: recipe.title,
-    ingredients: parseJsonArray(recipe.ingredients),
-    steps: parseJsonArray(recipe.steps),
-    note: recipe.note ?? undefined,
-    createdAt: recipe.createdAt,
-  });
+  res.status(201).json(recipe);
 });
 
-app.delete("/api/recipes/user/:id", requireAuth, (req, res) => {
-  const row = db
-    .prepare("SELECT user_id FROM user_recipes WHERE id = ?")
-    .get(req.params.id);
+app.delete("/api/recipes/user/:id", requireAuth, async (req, res) => {
+  const row = await getDb().collection("user_recipes").findOne({ id: req.params.id });
   if (!row) return res.status(404).json({ error: "Not found" });
-  if (row.user_id !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+  if (row.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
 
-  db.prepare("DELETE FROM user_recipes WHERE id = ?").run(req.params.id);
+  await getDb().collection("user_recipes").deleteOne({ id: req.params.id });
   res.json({ ok: true });
 });
 
-app.get("/api/recipes/people", (_req, res) => {
-  const rows = db
-    .prepare(
-      `SELECT id, user_id AS userId, author_name AS authorName, name, emoji,
-              difficulty, category, ingredients, steps, note, created_at AS createdAt
-       FROM people_recipes ORDER BY created_at DESC`,
-    )
-    .all();
+app.get("/api/recipes/people", async (_req, res) => {
+  const rows = await getDb()
+    .collection("people_recipes")
+    .find({}, { projection: { _id: 0 } })
+    .sort({ createdAt: -1 })
+    .toArray();
 
-  res.json(
-    rows.map((row) => ({
-      ...row,
-      ingredients: parseJsonArray(row.ingredients),
-      steps: parseJsonArray(row.steps),
-      category: row.category ?? undefined,
-      emoji: row.emoji ?? undefined,
-      note: row.note ?? undefined,
-    })),
-  );
+  res.json(rows);
 });
 
-app.post("/api/recipes/people", requireAuth, (req, res) => {
+app.post("/api/recipes/people", requireAuth, async (req, res) => {
   const recipe = {
     id: newId("pr"),
     userId: req.user.id,
     authorName: String(req.body.authorName ?? req.user.displayName),
     name: String(req.body.name ?? ""),
-    emoji: req.body.emoji ? String(req.body.emoji) : null,
+    emoji: req.body.emoji ? String(req.body.emoji) : undefined,
     difficulty: String(req.body.difficulty ?? "Normal"),
-    category: req.body.category ? String(req.body.category) : null,
-    ingredients: JSON.stringify(req.body.ingredients ?? []),
-    steps: JSON.stringify(req.body.steps ?? []),
-    note: req.body.note ? String(req.body.note) : null,
+    category: req.body.category ? String(req.body.category) : undefined,
+    ingredients: req.body.ingredients ?? [],
+    steps: req.body.steps ?? [],
+    note: req.body.note ? String(req.body.note) : undefined,
     createdAt: Date.now(),
   };
 
@@ -276,49 +215,21 @@ app.post("/api/recipes/people", requireAuth, (req, res) => {
     return res.status(400).json({ error: "Missing name" });
   }
 
-  db.prepare(
-    `INSERT INTO people_recipes
-     (id, user_id, author_name, name, emoji, difficulty, category, ingredients, steps, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    recipe.id,
-    recipe.userId,
-    recipe.authorName,
-    recipe.name,
-    recipe.emoji,
-    recipe.difficulty,
-    recipe.category,
-    recipe.ingredients,
-    recipe.steps,
-    recipe.note,
-    recipe.createdAt,
-  );
+  await getDb().collection("people_recipes").insertOne(recipe);
 
-  res.status(201).json({
-    id: recipe.id,
-    userId: recipe.userId,
-    authorName: recipe.authorName,
-    name: recipe.name,
-    emoji: recipe.emoji ?? undefined,
-    difficulty: recipe.difficulty,
-    category: recipe.category ?? undefined,
-    ingredients: parseJsonArray(recipe.ingredients),
-    steps: parseJsonArray(recipe.steps),
-    note: recipe.note ?? undefined,
-    createdAt: recipe.createdAt,
-  });
+  res.status(201).json(recipe);
 });
 
-app.delete("/api/recipes/people/:id", requireAuth, (req, res) => {
-  const row = db
-    .prepare("SELECT user_id FROM people_recipes WHERE id = ?")
-    .get(req.params.id);
+app.delete("/api/recipes/people/:id", requireAuth, async (req, res) => {
+  const row = await getDb().collection("people_recipes").findOne({ id: req.params.id });
   if (!row) return res.status(404).json({ error: "Not found" });
-  if (row.user_id !== req.user.id) return res.status(403).json({ error: "Forbidden" });
+  if (row.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
 
-  db.prepare("DELETE FROM people_recipes WHERE id = ?").run(req.params.id);
+  await getDb().collection("people_recipes").deleteOne({ id: req.params.id });
   res.json({ ok: true });
 });
+
+await connectDb();
 
 app.listen(PORT, () => {
   console.log(`FoodForMom API running on http://localhost:${PORT}`);
