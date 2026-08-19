@@ -1,35 +1,47 @@
 import { useMemo, useState, useEffect } from "react";
+import { AuthButton } from "./components/AuthButton";
+import { AuthModal } from "./components/AuthModal";
 import { CategoryFilterBar } from "./components/CategoryFilterBar";
-import { CommunityTab } from "./components/CommunityTab";
 import { FoodBrowseCard } from "./components/FoodBrowseCard";
 import { FoodDetailModal } from "./components/FoodDetailModal";
 import { FoodMatchCard } from "./components/FoodMatchCard";
 import { IngredientsModal } from "./components/IngredientsModal";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { Pagination } from "./components/Pagination";
+import { PeopleRecipeDetailModal } from "./components/PeopleRecipeDetailModal";
+import { PeopleRecipeTab } from "./components/PeopleRecipeTab";
 import { RecentlyViewedRow } from "./components/RecentlyViewedRow";
 import { SearchBar } from "./components/SearchBar";
 import { SlotReel } from "./components/SlotReel";
 import { SplashScreen } from "./components/SplashScreen";
 import { TabNav } from "./components/TabNav";
 import { foods } from "./data/food";
+import { useAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
 import { useInstallPrompt } from "./hooks/useInstallPrompt";
+import { usePeopleRecipes } from "./hooks/usePeopleRecipes";
 import { useRecentlyViewed } from "./hooks/useRecentlyViewed";
 import { useUserRecipes } from "./hooks/useUserRecipes";
 import { useLanguage } from "./i18n/LanguageContext";
-import type { AppTab, CategoryFilter, Food } from "./type";
+import type { AppTab, CategoryFilter, Food, PeopleRecipe } from "./type";
 import { filterFoods } from "./utils/filterFoods";
 import { getFoodCategory } from "./utils/foodHelpers";
 import { matchFoods } from "./utils/matchFoods";
 
 const SPLASH_KEY = "ffm_splash_v2";
+const PAGE_SIZE = 20;
 
 function App() {
   const { t } = useLanguage();
+  const { user, signup, login, logout } = useAuth();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const { recentIds, addRecent } = useRecentlyViewed();
   const { canInstall, install } = useInstallPrompt();
   const { recipes: userRecipes, addRecipe, deleteRecipe } = useUserRecipes();
+  const { peopleRecipes, addPeopleRecipe, deletePeopleRecipe } = usePeopleRecipes();
+
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [browsePage, setBrowsePage] = useState(1);
 
   const [splashDone, setSplashDone] = useState(
     () => localStorage.getItem(SPLASH_KEY) === "1",
@@ -43,6 +55,7 @@ function App() {
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [selectedPeopleRecipe, setSelectedPeopleRecipe] = useState<PeopleRecipe | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
 
@@ -66,6 +79,16 @@ function App() {
     [category, search],
   );
 
+  const browseTotalPages = Math.max(1, Math.ceil(filteredFoods.length / PAGE_SIZE));
+  const paginatedFoods = useMemo(
+    () => filteredFoods.slice((browsePage - 1) * PAGE_SIZE, browsePage * PAGE_SIZE),
+    [filteredFoods, browsePage],
+  );
+
+  useEffect(() => {
+    setBrowsePage(1);
+  }, [category, search]);
+
   const favoriteFoods = useMemo(
     () => foods.filter((f) => favorites.includes(f.id)),
     [favorites],
@@ -87,6 +110,8 @@ function App() {
     [selectedIngredients, filteredFoods],
   );
 
+  const communityCount = userRecipes.length + peopleRecipes.length;
+
   function openFood(food: Food) {
     setSelectedFood(food);
     addRecent(food.id);
@@ -99,6 +124,10 @@ function App() {
   function handleIngredientsSubmit(selected: string[]) {
     setSelectedIngredients(selected);
     setModalOpen(false);
+  }
+
+  function requireAuth() {
+    setAuthModalOpen(true);
   }
 
   if (!splashDone) {
@@ -115,7 +144,14 @@ function App() {
       </div>
 
       <div className="relative z-20 flex items-center justify-between px-4 pt-6 sm:px-6">
-        <div className="flex-1" />
+        <div className="flex flex-1">
+          <AuthButton
+            user={user}
+            onLogin={login}
+            onSignup={signup}
+            onLogout={logout}
+          />
+        </div>
         <LanguageSwitcher />
         <div className="flex flex-1 justify-end">
           {canInstall && (
@@ -129,14 +165,29 @@ function App() {
         </div>
       </div>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
-        <header className="text-center">
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+        <header className="mb-4 text-center">
           <h1 className="font-display text-4xl font-bold tracking-tight text-espresso drop-shadow-sm sm:text-5xl">
             {t("appTitle")}
           </h1>
         </header>
 
-        <SearchBar value={search} onChange={setSearch} />
+        {/* Sticky search — sits above filters/tabs so suggestions don't overlap */}
+        <div className="sticky top-0 z-40 -mx-4 mb-5 border-b border-[#e5ddd4]/60 bg-cream/95 px-4 pb-4 pt-1 backdrop-blur-md sm:-mx-6 sm:px-6">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            foods={foods}
+            peopleRecipes={peopleRecipes}
+            onSelectFood={openFood}
+            onSelectPeopleRecipe={(recipe) => {
+              setSelectedPeopleRecipe(recipe);
+              setTab("peopleRecipe");
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-5">
         <CategoryFilterBar
           value={category}
           onChange={setCategory}
@@ -146,7 +197,7 @@ function App() {
           active={tab}
           onChange={setTab}
           favoriteCount={favorites.length}
-          communityCount={userRecipes.length}
+          communityCount={communityCount}
         />
 
         {/* Browse tab */}
@@ -162,23 +213,36 @@ function App() {
             <section className="w-full">
               <p className="mb-4 text-sm font-semibold text-espresso/50">
                 {filteredFoods.length} {t("foodsInCategory")}
+                {filteredFoods.length > PAGE_SIZE && (
+                  <span className="ms-2 text-espresso/40">
+                    · {t("pageShowing")} {(browsePage - 1) * PAGE_SIZE + 1}–
+                    {Math.min(browsePage * PAGE_SIZE, filteredFoods.length)}
+                  </span>
+                )}
               </p>
               {filteredFoods.length === 0 ? (
                 <p className="py-12 text-center text-espresso/50 italic">
                   {t("noResults")}
                 </p>
               ) : (
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredFoods.map((food) => (
-                    <FoodBrowseCard
-                      key={food.id}
-                      food={food}
-                      isFavorite={isFavorite(food.id)}
-                      onToggleFavorite={toggleFavorite}
-                      onOpen={openFood}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {paginatedFoods.map((food) => (
+                      <FoodBrowseCard
+                        key={food.id}
+                        food={food}
+                        isFavorite={isFavorite(food.id)}
+                        onToggleFavorite={toggleFavorite}
+                        onOpen={openFood}
+                      />
+                    ))}
+                  </div>
+                  <Pagination
+                    page={browsePage}
+                    totalPages={browseTotalPages}
+                    onPageChange={setBrowsePage}
+                  />
+                </>
               )}
             </section>
           </div>
@@ -226,14 +290,18 @@ function App() {
           </section>
         )}
 
-        {/* Community tab */}
-        {tab === "community" && (
-          <CommunityTab
-            recipes={userRecipes}
-            onDelete={deleteRecipe}
-            onAddRecipe={addRecipe}
-            onOpenFood={openFood}
+        {/* PeopleRecipe tab */}
+        {tab === "peopleRecipe" && (
+          <PeopleRecipeTab
+            user={user}
+            peopleRecipes={peopleRecipes}
+            userRecipes={userRecipes}
             foods={foods}
+            onAddPeopleRecipe={addPeopleRecipe}
+            onDeletePeopleRecipe={(id) => deletePeopleRecipe(id, user?.id)}
+            onAddUserRecipe={addRecipe}
+            onDeleteUserRecipe={(id) => deleteRecipe(id, user?.id)}
+            onRequireAuth={requireAuth}
           />
         )}
 
@@ -265,6 +333,7 @@ function App() {
         {selectedIngredients.length > 0 && matches.length === 0 && (
           <p className="text-center text-espresso/50 italic">{t("noMatches")}</p>
         )}
+        </div>
       </main>
 
       <footer className="relative z-10 py-5 text-center">
@@ -285,8 +354,10 @@ function App() {
         <FoodDetailModal
           food={selectedFood}
           isFavorite={isFavorite(selectedFood.id)}
+          user={user}
           onClose={() => setSelectedFood(null)}
           onToggleFavorite={toggleFavorite}
+          onRequireAuth={requireAuth}
         />
       )}
 
@@ -295,6 +366,31 @@ function App() {
           allIngredients={allIngredients}
           onClose={() => setModalOpen(false)}
           onSubmit={handleIngredientsSubmit}
+        />
+      )}
+
+      {selectedPeopleRecipe && (
+        <PeopleRecipeDetailModal
+          recipe={selectedPeopleRecipe}
+          canDelete={!!user && selectedPeopleRecipe.userId === user.id}
+          onClose={() => setSelectedPeopleRecipe(null)}
+          onDelete={(id) => deletePeopleRecipe(id, user?.id)}
+        />
+      )}
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onLogin={async (email, password) => {
+            const err = await login(email, password);
+            if (!err) setAuthModalOpen(false);
+            return err;
+          }}
+          onSignup={async (email, password, displayName) => {
+            const err = await signup(email, password, displayName);
+            if (!err) setAuthModalOpen(false);
+            return err;
+          }}
         />
       )}
     </div>

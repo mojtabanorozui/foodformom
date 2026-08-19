@@ -1,13 +1,23 @@
 import type { Food, CategoryFilter } from "../type";
 import { foodLabelsFa } from "../i18n/foodLabels.fa";
+import { ingredientLabelsFa } from "../i18n/ingredientLabels.fa";
 import { getFoodCategory } from "./foodHelpers";
+import { searchIncludes } from "./searchText";
+
+function foodSearchText(food: Food): string {
+  const faName = foodLabelsFa[food.id] ?? "";
+  const faIngredients = food.ingredients
+    .map((key) => ingredientLabelsFa[key] ?? "")
+    .join(" ");
+  return [food.name, faName, food.ingredients.join(" "), faIngredients].join(" ");
+}
 
 export function filterFoods(
   foods: Food[],
   category: CategoryFilter,
   query: string,
 ): Food[] {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
 
   return foods.filter((food) => {
     const cat = getFoodCategory(food);
@@ -15,16 +25,7 @@ export function filterFoods(
 
     if (!q) return true;
 
-    const faName = foodLabelsFa[food.id]?.toLowerCase() ?? "";
-    const enName = food.name.toLowerCase();
-    const ingredients = food.ingredients.join(" ").toLowerCase();
-
-    return (
-      enName.includes(q) ||
-      faName.includes(q) ||
-      ingredients.includes(q) ||
-      cat.includes(q)
-    );
+    return searchIncludes(foodSearchText(food), q) || searchIncludes(cat, q);
   });
 }
 

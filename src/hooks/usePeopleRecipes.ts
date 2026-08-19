@@ -1,29 +1,29 @@
 import { useState, useCallback, useEffect } from "react";
-import type { UserRecipe } from "../type";
+import type { PeopleRecipe } from "../type";
 import {
-  apiCreateUserRecipe,
-  apiDeleteUserRecipe,
-  apiFetchUserRecipes,
+  apiCreatePeopleRecipe,
+  apiDeletePeopleRecipe,
+  apiFetchPeopleRecipes,
   checkApiHealth,
 } from "../lib/api";
 
-const STORAGE_KEY = "foodformom-user-recipes";
+const STORAGE_KEY = "foodformom-people-recipes";
 
-function loadLocal(): UserRecipe[] {
+function loadLocal(): PeopleRecipe[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as UserRecipe[]) : [];
+    return raw ? (JSON.parse(raw) as PeopleRecipe[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveLocal(recipes: UserRecipe[]) {
+function saveLocal(recipes: PeopleRecipe[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
 }
 
-export function useUserRecipes() {
-  const [recipes, setRecipes] = useState<UserRecipe[]>(loadLocal);
+export function usePeopleRecipes() {
+  const [recipes, setRecipes] = useState<PeopleRecipe[]>(loadLocal);
   const [apiReady, setApiReady] = useState(false);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function useUserRecipes() {
 
       if (online) {
         try {
-          const data = await apiFetchUserRecipes();
+          const data = await apiFetchPeopleRecipes();
           if (!cancelled) {
             setRecipes(data);
             saveLocal(data);
@@ -53,11 +53,11 @@ export function useUserRecipes() {
     };
   }, []);
 
-  const addRecipe = useCallback(
-    async (recipe: Omit<UserRecipe, "id" | "createdAt">) => {
+  const addPeopleRecipe = useCallback(
+    async (recipe: Omit<PeopleRecipe, "id" | "createdAt">) => {
       if (apiReady) {
         try {
-          const created = await apiCreateUserRecipe(recipe);
+          const created = await apiCreatePeopleRecipe(recipe);
           setRecipes((prev) => {
             const next = [created, ...prev];
             saveLocal(next);
@@ -69,9 +69,9 @@ export function useUserRecipes() {
         }
       }
 
-      const newRecipe: UserRecipe = {
+      const newRecipe: PeopleRecipe = {
         ...recipe,
-        id: `ur_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: `pr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         createdAt: Date.now(),
       };
       setRecipes((prev) => {
@@ -84,11 +84,11 @@ export function useUserRecipes() {
     [apiReady],
   );
 
-  const deleteRecipe = useCallback(
+  const deletePeopleRecipe = useCallback(
     async (id: string, userId?: string) => {
       if (apiReady && userId) {
         try {
-          await apiDeleteUserRecipe(id);
+          await apiDeletePeopleRecipe(id);
         } catch {
           return;
         }
@@ -105,10 +105,5 @@ export function useUserRecipes() {
     [apiReady],
   );
 
-  const recipesForFood = useCallback(
-    (foodId: string) => recipes.filter((r) => r.foodId === foodId),
-    [recipes],
-  );
-
-  return { recipes, addRecipe, deleteRecipe, recipesForFood };
+  return { peopleRecipes: recipes, addPeopleRecipe, deletePeopleRecipe };
 }

@@ -28,7 +28,8 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 function readStoredLocale(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === "fa" ? "fa" : "en";
+  if (stored === "en" || stored === "fa") return stored;
+  return "fa";
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

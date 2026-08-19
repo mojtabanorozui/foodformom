@@ -16,7 +16,7 @@ export function TabNav({ active, onChange, favoriteCount, communityCount }: TabN
     { id: "browse", icon: "📋" },
     { id: "spin", icon: "🎰" },
     { id: "favorites", icon: "❤️", badge: favoriteCount },
-    { id: "community", icon: "👩‍🍳", badge: communityCount },
+    { id: "peopleRecipe", icon: "👩‍🍳", badge: communityCount },
   ];
 
   return (

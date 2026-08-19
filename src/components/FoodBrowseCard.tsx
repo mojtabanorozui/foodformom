@@ -1,7 +1,9 @@
+import { getFoodAllergens } from "../data/allergens";
 import { useLanguage } from "../i18n/LanguageContext";
 import type { Food } from "../type";
 import { getFoodCategory } from "../utils/foodHelpers";
 import { getHeroImage } from "../utils/getRecipe";
+import { AllergenBadges } from "./AllergenBadges";
 import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { StepImage } from "./StepImage";
@@ -21,6 +23,7 @@ export function FoodBrowseCard({
 }: FoodBrowseCardProps) {
   const { foodName, ingredientLabel } = useLanguage();
   const hero = getHeroImage({ ...food, category: getFoodCategory(food) });
+  const allergens = getFoodAllergens(food);
 
   return (
     <article className="group overflow-hidden rounded-3xl bg-white shadow-md ring-1 ring-[#e5ddd4] transition-all hover:-translate-y-1 hover:shadow-xl">
@@ -43,8 +46,9 @@ export function FoodBrowseCard({
           <h3 className="font-display text-lg font-bold text-espresso">
             {foodName(food)}
           </h3>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={food.difficulty} />
+            <AllergenBadges allergens={allergens} compact />
           </div>
           <p className="mt-2 line-clamp-2 text-sm text-espresso/55">
             {food.ingredients.slice(0, 4).map(ingredientLabel).join(" · ")}

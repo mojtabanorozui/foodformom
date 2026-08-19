@@ -6,9 +6,10 @@ interface UserRecipesSectionProps {
   recipes: UserRecipe[];
   onDelete: (id: string) => void;
   onAdd: () => void;
+  currentUserId?: string;
 }
 
-export function UserRecipesSection({ recipes, onDelete, onAdd }: UserRecipesSectionProps) {
+export function UserRecipesSection({ recipes, onDelete, onAdd, currentUserId }: UserRecipesSectionProps) {
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function UserRecipesSection({ recipes, onDelete, onAdd }: UserRecipesSect
           {recipes.map((recipe) => {
             const isOpen = expanded === recipe.id;
             const isDeleting = confirmDelete === recipe.id;
+            const canDelete = !currentUserId || recipe.userId === currentUserId;
             return (
               <div
                 key={recipe.id}
@@ -129,6 +131,7 @@ export function UserRecipesSection({ recipes, onDelete, onAdd }: UserRecipesSect
                     )}
 
                     {/* Delete */}
+                    {canDelete && (
                     <div className="pt-1 flex justify-end">
                       {isDeleting ? (
                         <div className="flex items-center gap-2">
@@ -158,6 +161,7 @@ export function UserRecipesSection({ recipes, onDelete, onAdd }: UserRecipesSect
                         </button>
                       )}
                     </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { getFoodAllergens } from "../data/allergens";
 import { useLanguage } from "../i18n/LanguageContext";
-import type { Food } from "../type";
+import type { Food, User } from "../type";
 import { getFoodCategory } from "../utils/foodHelpers";
 import { heroImageForCategory } from "../data/stepImages";
 import { getRecipe } from "../utils/getRecipe";
 import { getStepText } from "../utils/recipeBuilder";
+import { AllergenBadges } from "./AllergenBadges";
 import { CategoryBadge } from "./CategoryBadge";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { StepImage } from "./StepImage";
@@ -24,24 +26,41 @@ const STEP_COLORS = [
 interface FoodDetailModalProps {
   food: Food;
   isFavorite: boolean;
+  user: User | null;
   onClose: () => void;
   onToggleFavorite: (id: string) => void;
+  onRequireAuth: () => void;
 }
 
 export function FoodDetailModal({
   food,
   isFavorite,
+  user,
   onClose,
   onToggleFavorite,
+  onRequireAuth,
 }: FoodDetailModalProps) {
   const { t, locale, foodName, ingredientLabel } = useLanguage();
   const recipe = getRecipe(food);
   const category = getFoodCategory(food);
   const heroKey = recipe.steps[0]?.imageKey ?? heroImageForCategory(category);
+  const allergens = getFoodAllergens(food);
 
   const { addRecipe, deleteRecipe, recipesForFood } = useUserRecipes();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const communityRecipes = recipesForFood(food.id);
+
+  function handleAddRecipe() {
+    if (!user) {
+      onRequireAuth();
+      return;
+    }
+    setAddModalOpen(true);
+  }
+
+  function handleDeleteRecipe(id: string) {
+    deleteRecipe(id, user?.id);
+  }
 
   return (
     <>
@@ -88,6 +107,16 @@ export function FoodDetailModal({
         </div>
 
         <div className="space-y-6 p-6">
+          {/* Allergens */}
+          {allergens.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-sm font-bold tracking-wide text-espresso/60 uppercase">
+                {t("allergenContains")}
+              </h3>
+              <AllergenBadges allergens={allergens} />
+            </section>
+          )}
+
           {/* Ingredients */}
           <section>
             <h3 className="mb-3 text-sm font-bold tracking-wide text-espresso/60 uppercase">
@@ -142,18 +171,22 @@ export function FoodDetailModal({
           {/* Community recipes */}
           <UserRecipesSection
             recipes={communityRecipes}
-            onDelete={deleteRecipe}
-            onAdd={() => setAddModalOpen(true)}
+            onDelete={handleDeleteRecipe}
+            onAdd={handleAddRecipe}
+            currentUserId={user?.id}
           />
         </div>
       </div>
     </div>
 
-    {addModalOpen && (
+    {addModalOpen && user && (
       <AddRecipeModal
         food={food}
+        authorName={user.displayName}
         onClose={() => setAddModalOpen(false)}
-        onSubmit={addRecipe}
+        onSubmit={(data) =>
+          addRecipe({ ...data, userId: user.id, authorName: user.displayName })
+        }
       />
     )}
     </>

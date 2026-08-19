@@ -6,6 +6,8 @@ import type { Food } from "../type";
 interface AddRecipeModalProps {
   /** If provided, the recipe is pre-assigned to this food. */
   food?: Food;
+  /** Pre-filled author name when logged in. */
+  authorName?: string;
   onClose: () => void;
   onSubmit: (data: {
     foodId: string;
@@ -16,14 +18,21 @@ interface AddRecipeModalProps {
     steps: string[];
     note?: string;
   }) => void;
+  onRequireAuth?: () => void;
 }
 
-export function AddRecipeModal({ food: preselectedFood, onClose, onSubmit }: AddRecipeModalProps) {
+export function AddRecipeModal({
+  food: preselectedFood,
+  authorName: prefilledAuthor,
+  onClose,
+  onSubmit,
+  onRequireAuth,
+}: AddRecipeModalProps) {
   const { t, locale, foodName } = useLanguage();
 
   const [selectedFood, setSelectedFood] = useState<Food | null>(preselectedFood ?? null);
   const [foodSearch, setFoodSearch] = useState("");
-  const [author, setAuthor] = useState("");
+  const [author, setAuthor] = useState(prefilledAuthor ?? "");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [ingredients, setIngredients] = useState<string[]>([""]);
@@ -66,7 +75,7 @@ export function AddRecipeModal({ food: preselectedFood, onClose, onSubmit }: Add
   function validate() {
     const errs: Record<string, string> = {};
     if (!selectedFood) errs.food = "Required";
-    if (!author.trim()) errs.author = "Required";
+    if (!prefilledAuthor && !author.trim()) errs.author = "Required";
     if (!title.trim()) errs.title = "Required";
     if (ingredients.every((s) => !s.trim())) errs.ingredients = "Required";
     if (steps.every((s) => !s.trim())) errs.steps = "Required";
@@ -76,11 +85,15 @@ export function AddRecipeModal({ food: preselectedFood, onClose, onSubmit }: Add
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!prefilledAuthor && onRequireAuth) {
+      onRequireAuth();
+      return;
+    }
     if (!validate() || !selectedFood) return;
     onSubmit({
       foodId: selectedFood.id,
       foodName: selectedFood.name,
-      authorName: author.trim(),
+      authorName: (prefilledAuthor ?? author).trim(),
       title: title.trim(),
       ingredients: ingredients.filter((s) => s.trim()),
       steps: steps.filter((s) => s.trim()),
@@ -167,19 +180,21 @@ export function AddRecipeModal({ food: preselectedFood, onClose, onSubmit }: Add
           )}
 
           {/* Author */}
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-espresso">
-              {t("communityAuthor")}
-              {errors.author && <span className="ms-2 text-red-500 text-xs">{errors.author}</span>}
-            </label>
-            <input
-              type="text"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder={t("communityAuthorPlaceholder")}
-              className="w-full rounded-xl border border-[#e5ddd4] bg-white px-4 py-2.5 text-sm text-espresso outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
-            />
-          </div>
+          {!prefilledAuthor && (
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-espresso">
+                {t("communityAuthor")}
+                {errors.author && <span className="ms-2 text-red-500 text-xs">{errors.author}</span>}
+              </label>
+              <input
+                type="text"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder={t("communityAuthorPlaceholder")}
+                className="w-full rounded-xl border border-[#e5ddd4] bg-white px-4 py-2.5 text-sm text-espresso outline-none focus:border-warm focus:ring-2 focus:ring-warm/20"
+              />
+            </div>
+          )}
 
           {/* Title */}
           <div>
