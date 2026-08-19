@@ -27,12 +27,27 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function checkApiHealth(): Promise<boolean> {
+export async function apiGetStats(): Promise<{
+  users: number;
+  peopleRecipes: number;
+  userRecipes: number;
+  recipes: number;
+} | null> {
+  try {
+    return await apiFetch("/api/stats");
+  } catch {
+    return null;
+  }
+}
+
+export async function checkApiHealth(): Promise<{ online: boolean; db: boolean }> {
   try {
     const res = await fetch("/api/health");
-    return res.ok;
+    if (!res.ok) return { online: false, db: false };
+    const data = (await res.json()) as { ok?: boolean; db?: boolean };
+    return { online: true, db: data.db === true };
   } catch {
-    return false;
+    return { online: false, db: false };
   }
 }
 

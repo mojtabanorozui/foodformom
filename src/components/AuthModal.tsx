@@ -10,11 +10,13 @@ interface AuthModalProps {
     password: string,
     displayName: string,
   ) => Promise<string | null>;
+  onSuccess?: (mode: AuthMode) => void;
+  authLoaded?: boolean;
 }
 
 type AuthMode = "login" | "signup";
 
-export function AuthModal({ onClose, onLogin, onSignup }: AuthModalProps) {
+export function AuthModal({ onClose, onLogin, onSignup, onSuccess, authLoaded = true }: AuthModalProps) {
   const { t } = useLanguage();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
@@ -51,6 +53,7 @@ export function AuthModal({ onClose, onLogin, onSignup }: AuthModalProps) {
         "authErrorPassword",
         "authErrorEmailTaken",
         "authErrorInvalid",
+        "authErrorServer",
       ];
       setErrorKey(
         knownKeys.includes(err as TranslationKey)
@@ -58,6 +61,7 @@ export function AuthModal({ onClose, onLogin, onSignup }: AuthModalProps) {
           : "authErrorInvalid",
       );
     } else {
+      onSuccess?.(mode);
       onClose();
     }
   }
@@ -170,10 +174,10 @@ export function AuthModal({ onClose, onLogin, onSignup }: AuthModalProps) {
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !authLoaded}
               className="flex-1 rounded-2xl bg-gradient-to-r from-warm to-sage px-4 py-3 text-sm font-bold text-white shadow-md disabled:opacity-60"
             >
-              {mode === "login" ? t("authLogin") : t("authSignup")}
+              {!authLoaded ? t("authConnecting") : mode === "login" ? t("authLogin") : t("authSignup")}
             </button>
           </div>
         </div>

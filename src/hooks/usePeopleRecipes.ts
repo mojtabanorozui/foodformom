@@ -25,16 +25,18 @@ function saveLocal(recipes: PeopleRecipe[]) {
 export function usePeopleRecipes() {
   const [recipes, setRecipes] = useState<PeopleRecipe[]>(loadLocal);
   const [apiReady, setApiReady] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      const online = await checkApiHealth();
+      const health = await checkApiHealth();
       if (cancelled) return;
-      setApiReady(online);
+      setApiReady(health.online);
+      setDbReady(health.db);
 
-      if (online) {
+      if (health.online && health.db) {
         try {
           const data = await apiFetchPeopleRecipes();
           if (!cancelled) {
@@ -55,7 +57,7 @@ export function usePeopleRecipes() {
 
   const addPeopleRecipe = useCallback(
     async (recipe: Omit<PeopleRecipe, "id" | "createdAt">) => {
-      if (apiReady) {
+      if (apiReady && dbReady) {
         try {
           const created = await apiCreatePeopleRecipe(recipe);
           setRecipes((prev) => {
@@ -81,12 +83,12 @@ export function usePeopleRecipes() {
       });
       return newRecipe;
     },
-    [apiReady],
+    [apiReady, dbReady],
   );
 
   const deletePeopleRecipe = useCallback(
     async (id: string, userId?: string) => {
-      if (apiReady && userId) {
+      if (apiReady && dbReady && userId) {
         try {
           await apiDeletePeopleRecipe(id);
         } catch {
@@ -102,7 +104,7 @@ export function usePeopleRecipes() {
         return next;
       });
     },
-    [apiReady],
+    [apiReady, dbReady],
   );
 
   return { peopleRecipes: recipes, addPeopleRecipe, deletePeopleRecipe };

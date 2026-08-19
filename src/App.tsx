@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { AuthButton } from "./components/AuthButton";
 import { AuthModal } from "./components/AuthModal";
+import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CategoryFilterBar } from "./components/CategoryFilterBar";
 import { FoodBrowseCard } from "./components/FoodBrowseCard";
 import { FoodDetailModal } from "./components/FoodDetailModal";
@@ -15,8 +16,10 @@ import { SearchBar } from "./components/SearchBar";
 import { SlotReel } from "./components/SlotReel";
 import { SplashScreen } from "./components/SplashScreen";
 import { TabNav } from "./components/TabNav";
+import { ToastContainer } from "./components/ToastContainer";
 import { foods } from "./data/food";
 import { useAuth } from "./hooks/useAuth";
+import { useToast } from "./hooks/useToast";
 import { useFavorites } from "./hooks/useFavorites";
 import { useInstallPrompt } from "./hooks/useInstallPrompt";
 import { usePeopleRecipes } from "./hooks/usePeopleRecipes";
@@ -33,7 +36,8 @@ const PAGE_SIZE = 20;
 
 function App() {
   const { t } = useLanguage();
-  const { user, signup, login, logout } = useAuth();
+  const { user, signup, login, logout, apiReady, dbReady, loaded } = useAuth();
+  const { toasts, showToast, dismissToast } = useToast();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const { recentIds, addRecent } = useRecentlyViewed();
   const { canInstall, install } = useInstallPrompt();
@@ -130,6 +134,15 @@ function App() {
     setAuthModalOpen(true);
   }
 
+  function handleAuthSuccess(mode: "login" | "signup") {
+    showToast(mode === "login" ? t("authLoginSuccess") : t("authSignupSuccess"));
+  }
+
+  async function handleLogout() {
+    await logout();
+    showToast(t("authLogoutSuccess"), "info");
+  }
+
   if (!splashDone) {
     return <SplashScreen onEnter={() => setSplashDone(true)} />;
   }
@@ -149,7 +162,9 @@ function App() {
             user={user}
             onLogin={login}
             onSignup={signup}
-            onLogout={logout}
+            onLogout={handleLogout}
+            onAuthSuccess={handleAuthSuccess}
+            authLoaded={loaded}
           />
         </div>
         <LanguageSwitcher />
@@ -164,6 +179,8 @@ function App() {
           )}
         </div>
       </div>
+
+      <ConnectionBanner apiReady={apiReady} dbReady={dbReady} loaded={loaded} />
 
       <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
         <header className="mb-4 text-center">
@@ -381,6 +398,8 @@ function App() {
       {authModalOpen && (
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+          authLoaded={loaded}
           onLogin={async (email, password) => {
             const err = await login(email, password);
             if (!err) setAuthModalOpen(false);
@@ -393,6 +412,8 @@ function App() {
           }}
         />
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

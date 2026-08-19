@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import { connectDb, getDb } from "./db.mjs";
+import { connectDb, getDb, isDbConnected } from "./db.mjs";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -19,6 +19,11 @@ function newId(prefix) {
 }
 
 async function authMiddleware(req, _res, next) {
+  if (!isDbConnected()) {
+    req.user = null;
+    return next();
+  }
+
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) {
@@ -56,10 +61,27 @@ function requireAuth(req, res, next) {
 app.use(authMiddleware);
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, db: isDbConnected() });
 });
 
-app.post("/api/auth/signup", async (req, res) => {
+app.get("/api/stats", requireDb, async (_req, res) => {
+  const db = getDb();
+  const [users, peopleRecipes, userRecipes] = await Promise.all([
+    db.collection("users").countDocuments(),
+    db.collection("people_recipes").countDocuments(),
+    db.collection("user_recipes").countDocuments(),
+  ]);
+  res.json({ users, peopleRecipes, userRecipes, recipes: peopleRecipes + userRecipes });
+});
+
+function requireDb(_req, res, next) {
+  if (!isDbConnected()) {
+    return res.status(503).json({ error: "Database not connected" });
+  }
+  next();
+}
+
+app.post("/api/auth/signup", requireDb, async (req, res) => {
   const email = String(req.body.email ?? "")
     .trim()
     .toLowerCase();
@@ -103,7 +125,7 @@ app.post("/api/auth/signup", async (req, res) => {
   });
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", requireDb, async (req, res) => {
   const email = String(req.body.email ?? "")
     .trim()
     .toLowerCase();
@@ -135,7 +157,7 @@ app.get("/api/auth/me", (req, res) => {
   res.json({ user: req.user });
 });
 
-app.post("/api/auth/logout", async (req, res) => {
+app.post("/api/auth/logout", requireDb, async (req, res) => {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (token) {
@@ -144,7 +166,7 @@ app.post("/api/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/recipes/user", async (_req, res) => {
+app.get("/api/recipes/user", requireDb, async (_req, res) => {
   const rows = await getDb()
     .collection("user_recipes")
     .find({}, { projection: { _id: 0 } })
@@ -154,7 +176,7 @@ app.get("/api/recipes/user", async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/recipes/user", requireAuth, async (req, res) => {
+app.post("/api/recipes/user", requireDb, requireAuth, async (req, res) => {
   const recipe = {
     id: newId("ur"),
     userId: req.user.id,
@@ -177,7 +199,7 @@ app.post("/api/recipes/user", requireAuth, async (req, res) => {
   res.status(201).json(recipe);
 });
 
-app.delete("/api/recipes/user/:id", requireAuth, async (req, res) => {
+app.delete("/api/recipes/user/:id", requireDb, requireAuth, async (req, res) => {
   const row = await getDb().collection("user_recipes").findOne({ id: req.params.id });
   if (!row) return res.status(404).json({ error: "Not found" });
   if (row.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
@@ -186,7 +208,7 @@ app.delete("/api/recipes/user/:id", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/recipes/people", async (_req, res) => {
+app.get("/api/recipes/people", requireDb, async (_req, res) => {
   const rows = await getDb()
     .collection("people_recipes")
     .find({}, { projection: { _id: 0 } })
@@ -196,7 +218,7 @@ app.get("/api/recipes/people", async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/recipes/people", requireAuth, async (req, res) => {
+app.post("/api/recipes/people", requireDb, requireAuth, async (req, res) => {
   const recipe = {
     id: newId("pr"),
     userId: req.user.id,
@@ -220,7 +242,7 @@ app.post("/api/recipes/people", requireAuth, async (req, res) => {
   res.status(201).json(recipe);
 });
 
-app.delete("/api/recipes/people/:id", requireAuth, async (req, res) => {
+app.delete("/api/recipes/people/:id", requireDb, requireAuth, async (req, res) => {
   const row = await getDb().collection("people_recipes").findOne({ id: req.params.id });
   if (!row) return res.status(404).json({ error: "Not found" });
   if (row.userId !== req.user.id) return res.status(403).json({ error: "Forbidden" });
